@@ -3,8 +3,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -18,41 +16,22 @@ internal static class Program
     public static readonly string Data = Path.Combine(Root, "data");
     public static readonly string SessionFile = Path.Combine(Data, "desktop-session.json");
 
-    [DllImport("user32.dll")] private static extern bool AllowSetForegroundWindow(int processId);
-
     [STAThread]
     private static void Main()
     {
         ApplicationConfiguration.Initialize();
-        Directory.CreateDirectory(Data);
-        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Root.ToUpperInvariant())))[..24];
-        using var mutex = new Mutex(true, @"Local\YtDlpStudioDesktop-" + key, out var first);
-        using var activate = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\YtDlpStudioActivate-" + key);
-        if (!first)
+        using var instance = SingleInstance.TryAcquire();
+        if (instance == null)
         {
-            try
-            {
-                using var info = JsonDocument.Parse(File.ReadAllText(SessionFile));
-                using var process = Process.GetProcessById(info.RootElement.GetProperty("pid").GetInt32());
-                if (string.Equals(process.MainModule?.FileName, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase))
-                    AllowSetForegroundWindow(process.Id);
-            }
-            catch { }
-            activate.Set();
+            MessageBox.Show("yt-dlp Studio 已在运行，本次启动已取消。\n请从任务栏或系统托盘打开已有窗口。",
+                "软件已在运行", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
+        Directory.CreateDirectory(Data);
         try
         {
             using var window = new StudioWindow();
-            // Create the handle before accepting activation requests from a second launch.
-            _ = window.Handle;
-            var wait = ThreadPool.RegisterWaitForSingleObject(activate, (_, _) =>
-            {
-                if (!window.IsDisposed)
-                    try { window.BeginInvoke(window.RestoreWindow); } catch (InvalidOperationException) { }
-            }, null, Timeout.Infinite, false);
-            try { Application.Run(window); }
-            finally { wait.Unregister(null); }
+            Application.Run(window);
         }
         catch (Exception error)
         {
@@ -62,7 +41,6 @@ internal static class Program
         finally
         {
             if (File.Exists(SessionFile)) File.Delete(SessionFile);
-            mutex.ReleaseMutex();
         }
     }
 }
@@ -241,7 +219,17 @@ internal sealed class StudioWindow : Form
         if (preferred != 47831 && await TryAttach(47831)) return;
 
         var node = Path.Combine(Program.Root, "bin", "node.exe");
-        if (!File.Exists(node)) throw new FileNotFoundException("缺少 bin/node.exe，请重新构建或解压完整的软件目录。");
+        if (!File.Exists(node))
+        {
+            var dependencies = Path.Combine(Program.Root, "dependencies.json");
+            if (File.Exists(dependencies))
+            {
+                using var config = JsonDocument.Parse(File.ReadAllText(dependencies));
+                if (config.RootElement.TryGetProperty("node", out var configured)) node = configured.GetString() ?? node;
+            }
+        }
+        if (!Path.IsPathFullyQualified(node) || !File.Exists(node))
+            throw new FileNotFoundException("未找到 Node.js。请重新运行安装程序检查并修复组件，或完整解压便携版。");
         for (var attempt = 0; attempt < 10; attempt++)
         {
             var port = preferred + attempt;

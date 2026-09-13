@@ -12,3 +12,7 @@ desktop/obj/
 build/
 /yt-dlp Studio.exe
 release/
+dependencies.json
+dependency-download-*/
+tests/single-instance/bin/
+tests/single-instance/obj/

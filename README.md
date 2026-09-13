@@ -6,25 +6,25 @@
 
 从 [Releases](https://github.com/Aliww2468/yt-dlp-studio/releases/latest) 下载 Windows x64 版本：
 
-- **Setup.exe**：安装到当前用户目录，创建开始菜单快捷方式，可从 Windows 设置卸载。卸载保留下载文件和个人设置。
-- **portable.zip**：完整解压到可写目录后运行，无需安装。
+- **Setup.exe**：轻量联网安装器，不内置 .NET、Node.js、yt-dlp、FFmpeg 等前置组件。安装时检查并复用系统中可用的组件，缺少时从官方来源下载，显示检查结果和下载进度。创建开始菜单快捷方式，可从 Windows 设置卸载。卸载保留下载文件、个人设置及系统共享组件。
+- **portable.zip**：自带 .NET、Node.js、yt-dlp、FFmpeg 和 FFprobe，完整解压到可写目录后运行；仍使用系统 WebView2 Runtime。
 
-适用于 Windows 10/11 x64，内置下载组件和运行时。校验值见 SHA256SUMS.txt。
+适用于 Windows 10/11 x64。校验值见 SHA256SUMS.txt。安装器需要联网补齐缺少的组件；安装 .NET 等系统组件时 Windows 可能请求管理员授权，取消或下载失败后可重新运行安装器重试。
 
 ## 启动
 
-双击 **yt-dlp Studio.exe**。原来的 **启动.vbs** 和 **启动.cmd** 也会打开同一个桌面应用。
+双击 **yt-dlp Studio.exe**。原来的 **启动.vbs** 和 **启动.cmd** 也使用同一启动检查。
 
-这是 Windows x64 桌面应用，使用独立桌面窗口，内置 Node.js 和 .NET 运行时，无需打开浏览器或命令行。需系统已安装 Microsoft Edge WebView2 Runtime。复制到其他电脑时请保留整个软件目录，不要只复制 EXE；目录需要有写入权限。缺少 WebView2 时可从 [Microsoft 官方页面](https://developer.microsoft.com/microsoft-edge/webview2/) 安装 Evergreen Runtime。
+这是 Windows x64 桌面应用，使用独立桌面窗口，无需打开浏览器或命令行。需系统已安装 Microsoft Edge WebView2 Runtime。复制到其他电脑时请保留整个软件目录，不要只复制 EXE；目录需要有写入权限。缺少 WebView2 时可从 [Microsoft 官方页面](https://developer.microsoft.com/microsoft-edge/webview2/) 安装 Evergreen Runtime。
 
-- 重复启动 EXE：恢复已有窗口，保留当前页面和输入。
+- 重复启动 EXE：提示「软件已在运行」并取消本次启动；不再打开第二个窗口或后台。同一 Windows 登录会话中的安装版、便携版及不同目录共用单实例锁。已有窗口可从任务栏或托盘打开。
 - 最小化或点击关闭：收起到托盘，下载继续运行。
 - 托盘左键单击 / 右键「打开控制台」：恢复同一个窗口。
 - 托盘右键「退出」或设置里的「退出应用」：关闭窗口、托盘和下载后台；任务正在下载、排队、解析或更新时会提示先结束操作。
 
 托盘为透明背景的下载箭头，随任务栏明暗主题调整颜色。Windows 可能将新图标放进隐藏图标区域（↑）。本机后台默认使用 127.0.0.1:47831；如果同目录后台已启动，会直接复用。
 
-下载组件位于 bin 目录。缺失时运行 **安装下载组件.cmd**，从 yt-dlp 官方 GitHub Releases 获取 yt-dlp.exe，以及 yt-dlp/FFmpeg-Builds 提供的 FFmpeg 和 FFprobe。
+便携版的下载组件位于 bin 目录。安装版优先复用 bin 中的组件、上次记录的有效路径及系统 PATH 中的兼容组件；Node.js 要求 22+ x64，FFmpeg 和 FFprobe 必须为同目录的一对可运行程序。已复用的路径记录在 dependencies.json，启动时直接使用，避免重新打开后找不到组件。系统组件被卸载或移动后，可重新运行安装器修复。应用内更新系统共享的 yt-dlp 时，会下载软件专用版本到 bin，不修改原来的共享程序。缺失时运行 **安装下载组件.cmd**，从 yt-dlp 官方 GitHub Releases 获取 yt-dlp.exe，以及 yt-dlp/FFmpeg-Builds 提供的 FFmpeg 和 FFprobe。
 
 ## 四个页面
 
@@ -86,3 +86,21 @@ npm.cmd test
 - [JavaScript 运行时说明](https://github.com/yt-dlp/yt-dlp/wiki/EJS)
 
 该 GUI 是独立的本地项目，不是 yt-dlp 官方图形客户端。第三方可执行文件遵循各自的许可证。
+
+## 制作发行包
+
+安装 .NET 8 SDK，准备好 bin 中的便携版组件后运行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-release.ps1
+```
+
+构建分别发布自带运行时的便携版和依赖系统 .NET Desktop 8 x64 的安装版，输出在 release/<版本>/。安装器仅打包界面、后端源码和依赖检测脚本，不包含下载引擎或运行时。
+
+只检查环境（不下载、不安装、不修改配置）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ensure-dependencies.ps1 -CheckOnly
+```
+
+依赖下载使用 HTTPS，Node.js、yt-dlp、FFmpeg、.NET 文件校验对应发布方提供的散列值；执行 Microsoft 组件安装器前验证签名。WebView2 按 [Microsoft 官方部署说明](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution) 检测并安装。首次安装在组件齐全时不请求下载；组件不足时磁盘占用取决于需补齐的组件，轻量安装包不等于运行时无需这些组件。

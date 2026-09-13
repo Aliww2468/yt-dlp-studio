@@ -8,10 +8,11 @@ import { promisify } from 'node:util';
 import { validateUrl, normalizeOptions, buildArgs, advancedDefaults } from './lib/options.mjs';
 import { startWindowsTray } from './lib/tray.mjs';
 import { normalizeTheme } from './lib/appearance.mjs';
+import { resolveDownloadTools } from './lib/dependencies.mjs';
 const exec = promisify(execFile);
 const root = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.YTDLP_DATA_DIR || path.join(root, 'data');
-const binDir = path.join(root, 'bin'), engine = path.join(binDir, 'yt-dlp.exe');
+let {binDir, engine, externalEngine} = resolveDownloadTools(root);
 const port = Number(process.env.PORT || 47831), origin = `http://127.0.0.1:${port}`;
 const token = randomBytes(32).toString('hex');
 fs.mkdirSync(dataDir, {recursive:true});
@@ -109,7 +110,18 @@ const server=http.createServer(async(req,res)=>{
         return json(res,{ok:true});
       }
       if(u.pathname==='/api/pick-folder') {const {stdout}=await exec('powershell.exe',['-NoProfile','-STA','-ExecutionPolicy','Bypass','-File',path.join(root,'scripts','pick-folder.ps1')],{windowsHide:true,timeout:120000});return json(res,{path:stdout.trim()});}
-      if(u.pathname==='/api/update') {if(active||inspecting||updating)throw new Error('请等待下载或解析结束再更新');updating=true;try{const {stdout}=await exec(engine,['--ignore-config','--no-plugin-dirs','-U'],{windowsHide:true,timeout:180000});return json(res,{message:stdout,environment:await environment(true)});}finally{updating=false;schedule();}}
+      if(u.pathname==='/api/update') {
+        if(active||inspecting||updating)throw new Error('请等待下载或解析结束再更新');
+        updating=true;
+        try {
+          // Never modify a system-owned engine; install an app-owned update instead.
+          const command = externalEngine ? path.join(process.env.SystemRoot || 'C:\\Windows','System32','WindowsPowerShell','v1.0','powershell.exe') : engine;
+          const args = externalEngine ? ['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(root,'scripts','ensure-dependencies.ps1'),'-Root',root,'-UpdateEngine'] : ['--ignore-config','--no-plugin-dirs','-U'];
+          const {stdout}=await exec(command,args,{windowsHide:true,timeout:600000});
+          ({binDir,engine,externalEngine}=resolveDownloadTools(root));
+          return json(res,{message:stdout,environment:await environment(true)});
+        } finally {updating=false;schedule();}
+      }
       if(u.pathname==='/api/shutdown') {if(active||jobs.some(j=>j.status==='queued')||inspecting||updating)throw new Error('请先结束正在进行的下载、解析或更新');json(res,{ok:true});setTimeout(()=>{persist();process.exit(0);},200);return;}
       return json(res,{error:'接口不存在'},404);
     }
