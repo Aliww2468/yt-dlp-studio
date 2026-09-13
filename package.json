@@ -1,0 +1,6 @@
+{
+  "name": "yt-dlp-studio", "version": "1.0.0", "private": true, "type": "module",
+  "description": "A quiet, local-first interface for yt-dlp",
+  "scripts": {"start": "node server.mjs", "test": "node --test tests/*.test.mjs", "setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1"},
+  "engines": {"node": ">=22"}
+}

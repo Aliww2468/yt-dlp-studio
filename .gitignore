@@ -1,0 +1,14 @@
+bin/*
+!bin/.gitkeep
+data/*
+!data/.gitkeep
+downloads/*
+!downloads/.gitkeep
+test-output/
+test-output-*/
+*.log
+desktop/bin/
+desktop/obj/
+build/
+/yt-dlp Studio.exe
+release/

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>yt-dlp Studio</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="#download" aria-label="yt-dlp Studio 首页"><span class="brand-icon" data-icon="download"></span><span>yt-dlp <b>Studio</b></span></a>
+    <div class="nav-label">工作空间</div>
+    <nav aria-label="主导航">
+      <button class="nav-item active" data-page="download"><i data-icon="plus"></i>新建下载</button>
+      <button class="nav-item" data-page="queue"><i data-icon="stack"></i>下载列表<span id="queue-count" class="count">0</span></button>
+      <div class="nav-separator"></div>
+      <button class="nav-item" data-page="advanced"><i data-icon="sliders"></i>高级选项<span id="advanced-dot"></span></button>
+      <button class="nav-item" data-page="settings"><i data-icon="settings"></i>设置</button>
+    </nav>
+    <div class="sidebar-bottom"><div class="engine-label"><span id="engine-short">正在连接下载引擎</span><span>v1.0</span></div></div>
+  </aside>
+  <main>
+    <header class="topbar"><span id="breadcrumb">工作空间 <span>/</span> 新建下载</span><span class="top-status"><span class="status-dot"></span><span id="connection-label">本地连接</span></span></header>
+    <div class="content">
+      <section id="page-download" class="page">
+        <div class="page-heading"><div><h1>新建下载</h1></div><button class="button subtle" id="home-folder"><i data-icon="folder"></i>打开下载文件夹</button></div>
+        <div class="card download-card">
+          <div class="card-title"><span class="step">01</span><h2>添加链接</h2></div>
+          <div class="url-box"><i data-icon="link"></i><textarea id="urls" rows="2" placeholder="粘贴链接，每行一个" aria-label="视频链接" spellcheck="false"></textarea><button id="paste" class="button small">粘贴链接</button></div>
+          <div class="link-footer"><button class="text-button" id="inspect">解析链接 <span>↗</span></button></div>
+          <div id="preview" class="preview" hidden></div>
+          <div class="section-line"></div>
+          <div class="card-title"><span class="step">02</span><h2>选择下载方式</h2></div>
+          <div class="mode-grid" role="group" aria-label="下载类型">
+            <button class="mode-card selected" data-mode="video" aria-pressed="true"><span class="mode-icon" data-icon="video"></span><span><strong>视频</strong></span><span class="radio"></span></button>
+            <button class="mode-card" data-mode="audio" aria-pressed="false"><span class="mode-icon" data-icon="music"></span><span><strong>仅音频</strong></span><span class="radio"></span></button>
+          </div>
+          <div id="video-controls" class="form-grid"><label>视频画质<select id="quality"><option value="best">最佳画质</option><option value="2160">最高 2160p（4K）</option><option value="1440">最高 1440p</option><option value="1080" selected>最高 1080p</option><option value="720">最高 720p</option><option value="480">最高 480p</option></select></label><label>视频格式<select id="video-format"><option value="mp4">MP4</option><option value="mkv">MKV</option><option value="auto">自动</option></select></label></div>
+          <div id="audio-controls" class="form-grid" hidden><label>音频格式<select id="audio-format"><option value="mp3">MP3</option><option value="m4a">M4A</option><option value="flac">FLAC</option><option value="wav">WAV</option></select></label></div>
+          <label class="folder-label">保存位置<div class="folder-input"><i data-icon="folder"></i><input id="output-dir" aria-label="保存位置" spellcheck="false"><button id="choose-folder" class="text-button">更改</button></div></label>
+          <div class="download-bottom"><button class="button primary" id="start-download"><i data-icon="download"></i>开始下载</button></div>
+        </div>
+        <div class="recent-heading"><h2>最近的下载<span id="recent-total">0 项</span></h2><button class="text-button" data-goto="queue">查看全部 →</button></div>
+        <div id="recent-jobs" class="recent-jobs"></div>
+      </section>
+      <section id="page-queue" class="page" hidden>
+        <div class="page-heading"><div><h1>下载列表</h1></div><button class="button primary" data-goto="download"><i data-icon="plus"></i>新建下载</button></div>
+        <div class="queue-summary"><div><span id="stat-total">0</span><small>全部任务</small></div><div><span id="stat-active">0</span><small>下载中 / 等待中</small></div><div><span id="stat-done">0</span><small>已完成</small></div></div>
+        <div class="queue-toolbar"><div class="filter-tabs" aria-label="筛选任务"><button class="active" data-filter="all">全部</button><button data-filter="active">进行中</button><button data-filter="completed">已完成</button><button data-filter="failed">未完成</button></div></div>
+        <div id="queue-jobs"></div>
+      </section>
+      <section id="page-advanced" class="page" hidden>
+        <div class="page-heading"><div><h1>高级选项</h1></div><span id="advanced-saved" class="save-indicator"></span></div>
+        <div class="card master-toggle"><span class="feature-icon" data-icon="sliders"></span><div><h2>启用高级选项</h2><p>仅对新添加的任务生效。</p></div><label class="switch"><input id="adv-enabled" type="checkbox" aria-label="启用高级选项"><span></span></label></div>
+        <div id="advanced-fields">
+          <div class="card settings-card"><div class="settings-heading"><i data-icon="stack"></i><h2>播放列表</h2></div><div class="setting-row"><div><strong>下载整个播放列表</strong><small>关闭时仅下载链接对应的单个视频</small></div><label class="switch"><input id="adv-playlist" type="checkbox" aria-label="下载整个播放列表"><span></span></label></div><label class="field-row">下载范围<input id="adv-playlistItems" placeholder="留空下载全部，例如 1-10 或 1,3,5"></label></div>
+          <div class="card settings-card"><div class="settings-heading"><i data-icon="captions"></i><h2>字幕与附加内容</h2></div><div class="setting-row"><div><strong>下载字幕文件</strong></div><label class="switch"><input id="adv-subtitles" type="checkbox" aria-label="下载字幕文件"><span></span></label></div><div class="setting-row"><div><strong>包含自动生成的字幕</strong></div><label class="switch"><input id="adv-autoSubs" type="checkbox" aria-label="包含自动字幕"><span></span></label></div><label class="field-row">字幕语言<input id="adv-subtitleLangs" placeholder="zh.*,en"><small>zh.* 为中文，en 为英文，多种语言用逗号分隔。</small></label><div class="setting-row"><div><strong>将字幕嵌入视频</strong><small>需先启用字幕下载。</small></div><label class="switch"><input id="adv-embedSubs" type="checkbox" aria-label="将字幕嵌入视频"><span></span></label></div><div class="setting-row"><div><strong>保存封面图片</strong></div><label class="switch"><input id="adv-thumbnail" type="checkbox" aria-label="保存封面图片"><span></span></label></div><div class="setting-row"><div><strong>写入媒体信息</strong></div><label class="switch"><input id="adv-metadata" type="checkbox" aria-label="写入媒体信息"><span></span></label></div></div>
+          <div class="card settings-card"><div class="settings-heading"><i data-icon="globe"></i><h2>网络与访问</h2></div><div class="form-grid"><label>下载限速<input id="adv-rateLimit" placeholder="留空不限速，例如 2M 或 500K"></label><label>分片并发数<select id="adv-fragments"><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></label></div><label class="field-row">代理地址<input id="adv-proxy" placeholder="例如 http://127.0.0.1:7890" autocomplete="off"><small>留空使用系统环境。</small></label><div class="form-grid"><label>读取浏览器登录状态<select id="adv-cookiesBrowser"><option value="">不读取</option><option value="chrome">Chrome</option><option value="edge">Edge</option><option value="firefox">Firefox</option></select></label><label>失败重试次数<input id="adv-retries" type="number" min="0" max="20"></label></div><p class="inline-note">选择后将读取该浏览器的 Cookie。</p></div>
+        </div>
+      </section>
+      <section id="page-settings" class="page" hidden>
+        <div class="page-heading"><div><h1>设置</h1></div><span class="save-indicator" id="settings-saved"></span></div>
+        <div class="card settings-card"><div class="settings-heading"><i data-icon="sparkles"></i><h2>外观与体验</h2></div><fieldset class="theme-picker"><legend>主题风格</legend><div class="theme-grid" id="theme-options"></div></fieldset><div class="setting-row"><div><strong>紧凑下载列表</strong></div><label class="switch"><input id="compact" type="checkbox" aria-label="紧凑下载列表"><span></span></label></div></div>
+        <div class="card settings-card"><div class="settings-heading"><i data-icon="folder"></i><h2>存储</h2></div><label class="field-row">默认下载文件夹<div class="folder-input"><input id="settings-output-dir" aria-label="默认下载文件夹"><button id="settings-choose-folder" class="text-button">更改</button></div></label></div>
+        <div class="card settings-card"><div class="settings-heading"><i data-icon="cpu"></i><h2>下载引擎</h2><button id="refresh-env" class="text-button">重新检测</button></div><div id="environment"></div><div class="engine-actions"><button id="update-engine" class="button"><i data-icon="refresh"></i>更新 yt-dlp</button><a class="text-button" href="https://github.com/yt-dlp/yt-dlp" target="_blank" rel="noreferrer">官方 GitHub ↗</a></div><p id="engine-hint" class="inline-note" hidden>请运行「安装下载组件.cmd」，完成后点击「重新检测」。</p></div>
+        <div class="about-row"><div><strong>yt-dlp Studio</strong><small>关闭窗口后下载继续；从托盘可重新打开或退出。</small></div><button id="shutdown" class="button subtle"><i data-icon="power"></i>退出应用</button></div>
+      </section>
+    </div>
+  </main>
+</div>
+<div id="toast" role="status" hidden></div>
+<dialog id="log-dialog"><div class="dialog-heading"><h2>任务详情</h2><button id="close-dialog" class="icon-button" aria-label="关闭详情" data-icon="close"></button></div><p id="log-title"></p><pre id="log-content"></pre><div id="log-files"></div></dialog>
+</body></html>
