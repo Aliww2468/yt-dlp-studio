@@ -1,6 +1,6 @@
 # 数据与网络说明
 
-适用版本：yt-dlp Studio v1.1.1。
+适用版本：yt-dlp Studio v1.2.0。
 
 [返回项目首页](../README.md)
 

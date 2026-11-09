@@ -1,6 +1,6 @@
 # 安装、升级与卸载说明
 
-适用版本：yt-dlp Studio v1.1.1。本文面向 Windows x64 用户。
+适用版本：yt-dlp Studio v1.2.0。本文面向 Windows x64 用户。
 
 [返回项目首页](../README.md)
 

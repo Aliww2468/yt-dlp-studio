@@ -14,7 +14,7 @@ using Microsoft.Win32;
 internal static class Installer
 {
     const string Product = "yt-dlp Studio";
-    const string Version = "1.1.1";
+    const string Version = "1.2.0";
     const string Key = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\YtDlpStudio";
     static string DefaultFolder { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", Product); } }
     static string Shortcut { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), Product + ".lnk"); } }

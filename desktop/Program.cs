@@ -295,6 +295,13 @@ internal sealed class StudioWindow : Form
                         Reply(id, new { path = selected });
                     }
                     break;
+                case "pick-cookies":
+                    using (var dialog = new OpenFileDialog { Title = "选择 Cookie 文件（cookies.txt）", Filter = "Cookie 文件 (*.txt)|*.txt|所有文件 (*.*)|*.*", CheckFileExists = true })
+                    {
+                        var selected = dialog.ShowDialog(this) == DialogResult.OK ? dialog.FileName : null;
+                        Reply(id, new { path = selected });
+                    }
+                    break;
                 case "shutdown":
                     if (exiting) throw new InvalidOperationException("正在退出…");
                     exiting = true;

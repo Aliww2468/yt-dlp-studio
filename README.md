@@ -2,7 +2,7 @@
 
 yt-dlp Studio 是面向 Windows 的中文视频与音频下载桌面应用。项目以 yt-dlp 为下载引擎，提供链接解析、下载队列、媒体格式选择、字幕配置、主题切换及系统托盘等功能。
 
-当前正式版本为 **v1.1.1**。本项目为独立图形客户端，与 yt-dlp 官方项目不存在官方客户端关系。站点解析及媒体提取能力由所使用的 yt-dlp 版本决定。
+当前正式版本为 **v1.2.0**。本项目为独立图形客户端，与 yt-dlp 官方项目不存在官方客户端关系。站点解析及媒体提取能力由所使用的 yt-dlp 版本决定。
 
 ## 下载
 
@@ -10,11 +10,11 @@ yt-dlp Studio 是面向 Windows 的中文视频与音频下载桌面应用。项
 
 | 发行文件 | 适用场景 | 组件提供方式 |
 | --- | --- | --- |
-| `yt-dlp-Studio-1.1.1-win-x64-Setup.exe` | 在固定电脑上安装使用 | 轻量联网安装器，检查并复用已有组件，缺少时下载 |
-| `yt-dlp-Studio-1.1.1-win-x64-portable.zip` | 使用完整目录部署或保存便携副本 | 自带 .NET、Node.js、yt-dlp、FFmpeg 和 FFprobe，使用系统 WebView2 |
+| `yt-dlp-Studio-1.2.0-win-x64-Setup.exe` | 在固定电脑上安装使用 | 轻量联网安装器，检查并复用已有组件，缺少时下载 |
+| `yt-dlp-Studio-1.2.0-win-x64-portable.zip` | 使用完整目录部署或保存便携副本 | 自带 .NET、Node.js、yt-dlp、FFmpeg 和 FFprobe，使用系统 WebView2 |
 | `SHA256SUMS.txt` | 核对下载文件是否完整 | 提供安装包及便携包的 SHA-256 校验值 |
 
-v1.1.1 安装器大小为 521,216 字节，约 509 KiB；便携包大小为 246,502,688 字节，约 235 MiB。安装器体积不包含后续可能需要下载的前置组件。实际新增磁盘占用取决于已有系统环境、缓存及下载内容。
+v1.2.0 安装器大小为 525,312 字节，约 513 KiB；便携包大小为 252,245,309 字节，约 241 MiB。安装器体积不包含后续可能需要下载的前置组件。实际新增磁盘占用取决于已有系统环境、缓存及下载内容。
 
 ## 系统要求
 
@@ -52,7 +52,7 @@ v1.1.1 安装器大小为 521,216 字节，约 509 KiB；便携包大小为 246,
 
 ## 文档目录
 
-完整文档也可从 [v1.1.1 文档包](https://github.com/Aliww2468/yt-dlp-studio/releases/download/v1.1.1/yt-dlp-Studio-1.1.1-Documentation.zip) 下载。该附件与程序包分开提供，可使用同页的 Documentation-SHA256SUMS.txt 校验。
+完整文档也可从 [v1.2.0 文档包](https://github.com/Aliww2468/yt-dlp-studio/releases/download/v1.2.0/yt-dlp-Studio-1.2.0-Documentation.zip) 下载。该附件与程序包分开提供，可使用同页的 Documentation-SHA256SUMS.txt 校验。
 
 | 文档 | 内容 |
 | --- | --- |
