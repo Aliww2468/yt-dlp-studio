@@ -29,6 +29,8 @@ document.querySelectorAll('[id^="adv-"],#compact').forEach(el=>el.addEventListen
 for(const id of ['output-dir','settings-output-dir'])$(id).addEventListener('change',()=>{const other=id==='output-dir'?'settings-output-dir':'output-dir';$(other).value=$(id).value;saveSettings();});
 async function chooseFolder(button){button.disabled=true;try{const r=await api('pick-folder');if(r.path){$('output-dir').value=$('settings-output-dir').value=r.path;await saveSettings();}}catch(e){toast(e.message);}finally{button.disabled=false;}}
 $('choose-folder').onclick=()=>chooseFolder($('choose-folder'));$('settings-choose-folder').onclick=()=>chooseFolder($('settings-choose-folder'));
+$('choose-cookies').onclick=async()=>{const button=$('choose-cookies');button.disabled=true;try{const r=await api('pick-cookies');if(r.path){$('adv-cookiesFile').value=r.path;saveSettings();}}catch(e){toast(e.message);}finally{button.disabled=false;}};
+$('clear-cookies').onclick=()=>{if(!$('adv-cookiesFile').value)return;$('adv-cookiesFile').value='';saveSettings();};
 $('home-folder').onclick=()=>api('open-folder',{outputDir:$('output-dir').value}).catch(e=>toast(e.message));
 $('paste').onclick=async()=>{try{const text=await navigator.clipboard.readText();if(!text.trim())return toast('剪贴板为空');$('urls').value=text.trim();$('preview').hidden=true;$('urls').focus();}catch{toast('无法读取剪贴板，请在链接框中按 Ctrl + V 粘贴');$('urls').focus();}};
 $('urls').addEventListener('input',()=>{$('preview').hidden=true;});
@@ -37,11 +39,41 @@ $('start-download').onclick=async()=>{if(!$('urls').value.trim()){toast('先粘�
 function duration(seconds){if(!Number.isFinite(seconds))return'时长未知';const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=Math.floor(seconds%60);return h?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`:`${m}:${String(s).padStart(2,'0')}`;}
 function bytes(n){if(!n||!Number.isFinite(n))return'';const units=['B','KB','MB','GB'];let i=0;while(n>=1024&&i<3){n/=1024;i++;}return`${n.toFixed(i?1:0)} ${units[i]}`;}
 function empty(title='暂无下载任务'){return `<div class="empty">${icon('download')}<strong>${title}</strong></div>`;}
-function jobCard(j){const active=busyStates.includes(j.status);const state={queued:'等待中',running:'正在下载',processing:'正在处理',canceling:'正在取消',completed:'已完成',failed:'下载失败',canceled:'已取消',interrupted:'已中断'}[j.status]||j.status;const action=(name,label,ico)=>`<button class="icon-button" data-job="${j.id}" data-action="${name}" title="${label}" aria-label="${label}">${icon(ico)}</button>`;let controls=action('logs','查看任务详情','more');if(active)controls+=action('cancel','取消下载','close');else{if(['failed','interrupted','canceled'].includes(j.status))controls+=action('retry','重试下载','refresh');controls+=action('folder','打开所在文件夹','folder')+action('remove','移除记录','trash');}let host;try{host=new URL(j.url).hostname;}catch{host=''}const progressText=j.status==='running'&&j.progress!=null?` · ${Math.floor(j.progress)}%`:'';const meta=[host,j.mode==='audio'?'音频':'视频',j.playlist?'列表 · 进度为当前文件':'',j.speed?`${bytes(j.speed)}/s`:'',j.eta?`剩余 ${duration(j.eta)}`:'',j.status==='completed'&&j.files.length?`${j.files.length} 个文件`:''].filter(Boolean);return `<article class="job"><div class="job-top"><div class="job-icon">${icon(j.mode==='audio'?'music':'video')}</div><div class="job-info"><strong class="job-title" title="${escape(j.title)}">${escape(j.title)}</strong><div class="job-subtitle">${meta.map(m=>`<span>${escape(m)}</span>`).join('')}</div></div><span class="job-state ${j.status}">${state}${progressText}</span><div class="job-actions">${controls}</div></div>${active?`<div class="job-progress ${j.progress==null||j.status==='processing'?'indeterminate':''}" data-progress="${j.id}"><span></span></div>`:''}${j.error&&j.status==='failed'?`<div class="job-error">${escape(j.error)}</div>`:''}</article>`;}
+function jobCard(j) {
+  const active = busyStates.includes(j.status);
+  const state = {queued:'等待中',running:'正在下载',processing:'正在处理',canceling:'正在取消',completed:'已完成',failed:'下载失败',canceled:'已取消',interrupted:'已中断'}[j.status] || j.status;
+  const label = j.subsOnly && active ? '正在补下字幕' : state;
+  const action = (name,label,ico) => `<button class="icon-button" data-job="${j.id}" data-action="${name}" title="${label}" aria-label="${label}">${icon(ico)}</button>`;
+  let controls = action('logs','查看任务详情','more');
+  if (active) controls += action('cancel','取消下载','close');
+  else {
+    if (['failed','interrupted','canceled'].includes(j.status)) controls += action('retry','重试下载','refresh');
+    if (j.status==='completed' && j.failedSubs?.length) controls += action('subs',`补下字幕：${j.failedSubs.join(', ')}`,'captions');
+    controls += action('folder','打开所在文件夹','folder') + action('remove','移除记录','trash');
+  }
+  let host; try { host = new URL(j.url).hostname; } catch { host = ''; }
+  const progressText = j.status==='running' && j.progress!=null ? ` · ${Math.floor(j.progress)}%` : '';
+  const meta = [host,j.mode==='audio'?'音频':'视频',j.playlist?'列表 · 进度为当前文件':'',j.speed?`${bytes(j.speed)}/s`:'',j.eta?`剩余 ${duration(j.eta)}`:'',j.status==='completed' && j.files.length?`${j.files.length} 个文件`:''].filter(Boolean);
+  const warnings = j.subtitleWarnings || [];
+  const notice = warnings.length > 3 ? `${warnings.slice(0,3).join(' ')} 另有 ${warnings.length-3} 条字幕提示，见任务详情。` : warnings.join(' ');
+  return `<article class="job"><div class="job-top">
+    <div class="job-icon">${icon(j.mode==='audio'?'music':'video')}</div>
+    <div class="job-info"><strong class="job-title" title="${escape(j.title)}">${escape(j.title)}</strong><div class="job-subtitle">${meta.map(m=>`<span>${escape(m)}</span>`).join('')}</div></div>
+    <span class="job-state ${j.status}">${label}${progressText}</span><div class="job-actions">${controls}</div></div>
+    ${active?`<div class="job-progress ${j.progress==null||j.status==='processing'?'indeterminate':''}" data-progress="${j.id}"><span></span></div>`:''}
+    ${j.error && j.status==='failed'?`<div class="job-error">${escape(j.error)}</div>`:''}
+    ${notice?`<div class="job-warning">${escape(notice)}</div>`:''}</article>`;
+}
 function renderJobs(){const all=[...jobs].reverse(),active=jobs.filter(j=>busyStates.includes(j.status));$('queue-count').textContent=String(active.length||jobs.length);$('stat-total').textContent=String(jobs.length);$('stat-active').textContent=String(active.length);$('stat-done').textContent=String(jobs.filter(j=>j.status==='completed').length);$('recent-total').textContent=`${jobs.length} 项`;$('recent-jobs').innerHTML=all.length?all.slice(0,2).map(jobCard).join(''):empty();const list=all.filter(j=>filter==='all'||filter==='active'&&busyStates.includes(j.status)||filter==='completed'&&j.status==='completed'||filter==='failed'&&['failed','canceled','interrupted'].includes(j.status));$('queue-jobs').innerHTML=list.length?list.map(jobCard).join(''):empty(filter==='all'?'暂无下载任务':'无匹配任务');document.querySelectorAll('[data-progress]').forEach(el=>{const j=jobs.find(x=>x.id===el.dataset.progress);if(j.progress!=null&&j.status!=='processing')el.firstElementChild.style.width=`${Math.max(0,Math.min(100,j.progress))}%`;});if(logId&&$('log-dialog').open)renderLog(logId);}
 document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));renderJobs();});
-function renderLog(id){const j=jobs.find(x=>x.id===id);if(!j)return;$('log-title').textContent=j.title;$('log-content').textContent=(j.logs.length?j.logs.join('\n'):'暂无日志')+(j.error?`\n\n${j.error}`:'');$('log-files').textContent=j.files.length?`已保存文件：\n${j.files.join('\n')}`:`保存位置：${j.outputDir}`;}
-document.addEventListener('click',async e=>{const b=e.target.closest('[data-job]');if(!b)return;const id=b.dataset.job,action=b.dataset.action;if(action==='logs'){logId=id;renderLog(id);$('log-dialog').showModal();return;}b.disabled=true;try{if(action==='folder')await api('open-folder',{id});else{await api('job-action',{id,action});if(action==='remove')toast('已移除记录，下载文件仍保留在本地');}}catch(e){toast(e.message);}finally{b.disabled=false;}});
+function renderLog(id) {
+  const j = jobs.find(x=>x.id===id);
+  if (!j) return;
+  $('log-title').textContent = j.title;
+  $('log-content').textContent = [j.logs.join('\n'), ...(j.subtitleWarnings || []), j.error].filter(Boolean).join('\n\n') || '暂无日志';
+  $('log-files').textContent = j.files.length ? `已保存文件：\n${j.files.join('\n')}` : `保存位置：${j.outputDir}`;
+}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-job]');if(!b)return;const id=b.dataset.job,action=b.dataset.action;if(action==='logs'){logId=id;renderLog(id);$('log-dialog').showModal();return;}b.disabled=true;try{if(action==='folder')await api('open-folder',{id});else{await api('job-action',{id,action});if(action==='remove')toast('已移除记录，下载文件仍保留在本地');if(action==='subs')toast('已开始补下字幕，只下载缺失的字幕');}}catch(e){toast(e.message);}finally{b.disabled=false;}});
 $('close-dialog').onclick=()=>$('log-dialog').close();$('log-dialog').addEventListener('close',()=>logId=null);
 function renderEnvironment(){const rows=[['yt-dlp',env.yt],['FFmpeg',env.ffmpeg?.split(' Copyright')[0]],['FFprobe',env.ffprobe?.split(' Copyright')[0]],['JavaScript 运行时',`Node.js ${env.node}`]];$('environment').innerHTML=rows.map(([name,value])=>`<div class="env-row"><span>${name}</span><span class="${value?'':'missing'}" title="${escape(value||'未安装')}">${escape(value||'未安装')}</span></div>`).join('');$('engine-hint').hidden=env.ready;$('engine-short').textContent=env.ready?`yt-dlp ${env.yt}`:'下载组件尚未就绪';$('start-download').title=env.ready?'':'请先安装下载组件';}
 $('refresh-env').onclick=async()=>{$('refresh-env').disabled=true;try{env=await api('environment');renderEnvironment();toast(env.ready?'所有下载组件已就绪':'仍有组件缺失，请运行「安装下载组件.cmd」');}catch(e){toast(e.message);}finally{$('refresh-env').disabled=false;}};

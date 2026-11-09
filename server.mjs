@@ -7,6 +7,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import { validateUrl, normalizeOptions, buildArgs, advancedDefaults } from './lib/options.mjs';
 import { startWindowsTray } from './lib/tray.mjs';
+import { explainError } from './lib/errors.mjs';
 import { normalizeTheme } from './lib/appearance.mjs';
 import { resolveDownloadTools } from './lib/dependencies.mjs';
 const exec = promisify(execFile);
@@ -21,12 +22,22 @@ const save = (name, value) => { const dest = path.join(dataDir,name); fs.writeFi
 let settings = { theme: 'light', compact: false, outputDir: path.join(root,'downloads'), advanced: {...advancedDefaults}, ...read('settings.json',{}) };
 settings.theme = normalizeTheme(settings.theme);
 delete settings.glass;
-let jobs = read('jobs.json', []).map(j => ['running','queued','processing','canceling'].includes(j.status) ? {...j,status:'interrupted',speed:null,eta:null} : j);
+// Older records only kept the warning text, so recover the track names from it.
+const failedTracks = j => j.failedSubs || (j.subtitleWarnings || []).map(w => /^([\w-]+) 字幕未下载/.exec(w)?.[1]).filter(Boolean);
+let jobs = read('jobs.json', []).map(j => {
+  j = {...j, failedSubs: failedTracks(j)};
+  // A subtitle-only run never touches the saved media, so an interrupted one leaves a completed job.
+  if (j.subsOnly) { delete j.subsOnly; return ['running','queued','canceling'].includes(j.status) ? {...j,status:'completed',speed:null,eta:null} : j; }
+  return ['running','queued','processing','canceling'].includes(j.status) ? {...j,status:'interrupted',speed:null,eta:null} : j;
+});
 const clients = new Set(); let active = null, inspecting = false, updating = false, envCache = null;
 const publicJobs = () => jobs.map(({ options, ...j }) => j);
 const emit = () => { const value = `data: ${JSON.stringify(publicJobs())}\n\n`; for (const c of clients) c.write(value); };
 const persist = () => save('jobs.json',jobs);
 const log = (job,line) => { job.logs.push(line.slice(0,4000)); job.logs = job.logs.slice(-100); };
+function addSubtitleWarning(job, message) {
+  if (!job.subtitleWarnings.includes(message)) job.subtitleWarnings.push(message);
+}
 function stopChild(child) {
   if (process.platform === 'win32') { const killer = spawn('taskkill',['/pid',String(child.pid),'/t','/f'],{windowsHide:true}); killer.on('error',()=>child.kill()); }
   else child.kill('SIGTERM');
@@ -35,25 +46,79 @@ function schedule() {
   if (active || updating) return;
   const job = jobs.find(j=>j.status==='queued'); if (!job) return;
   try { fs.mkdirSync(job.options.outputDir,{recursive:true}); } catch (e) { job.status='failed';job.error=`无法创建保存目录：${e.message}`;persist();emit();schedule();return; }
-  job.status='running'; job.error=''; job.speed=null; job.eta=null;
-  const child = spawn(engine,buildArgs(job.url,job.options,{binDir}),{windowsHide:true,cwd:root});
+  const subsOnly = job.subsOnly, previous = {warnings:job.subtitleWarnings||[], failed:job.failedSubs||[]};
+  const adv = job.options.advanced;
+  if (adv.enabled && adv.cookiesFile && !fs.statSync(adv.cookiesFile,{throwIfNoEntry:false})?.isFile()) {
+    const message = `找不到 Cookie 文件：${adv.cookiesFile}。请在「高级选项 → 网络与访问」中重新选择。`;
+    if (subsOnly) { delete job.subsOnly; job.status='completed'; if(!job.subtitleWarnings.includes(message)) job.subtitleWarnings.push(message); }
+    else { job.status='failed'; job.error=message; }
+    persist();emit();schedule();return;
+  }
+  let args;
+  try { args = buildArgs(job.url,job.options,{binDir,subtitleLangs:subsOnly,mediaFile:!job.playlist && job.files.length===1 ? job.files[0] : null}); } catch (e) { job.status=subsOnly?'completed':'failed'; if(subsOnly)delete job.subsOnly; else job.error=e.message; persist();emit();schedule();return; }
+  job.status='running'; job.error=''; job.speed=null; job.eta=null; job.subtitleWarnings=[]; job.failedSubs=[];
+  if (subsOnly) { job.progress=null; log(job,`—— 补下字幕：${subsOnly.join(', ')} ——`); }
+  const child = spawn(engine,args,{windowsHide:true,cwd:root});
   child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');
   active={child,id:job.id};emit();persist();
-  let out='',err='',done=false;
+  let out='',err='',done=false,mediaSaved=false;
   const line = value => {
     if (!value) return;
     try {
       if (value.startsWith('__PROGRESS__')) { const p=JSON.parse(value.slice(12)); const total=p.total_bytes || p.total_bytes_estimate; job.progress=total ? Math.min(100,p.downloaded_bytes/total*100) : null; job.speed=p.speed;job.eta=p.eta;job.downloaded=p.downloaded_bytes;job.total=total; if(job.status!=='canceling') job.status=p.status==='finished'?'processing':'running'; }
       else if(value.startsWith('__TITLE__')) {job.title=JSON.parse(value.slice(9));job.progress=0;}
-      else if(value.startsWith('__FILE__')) {const file=JSON.parse(value.slice(8));if(!job.files.includes(file))job.files.push(file);}
+      else if(value.startsWith('__FILE__')) {
+        const file=JSON.parse(value.slice(8));
+        const stat=fs.statSync(file,{throwIfNoEntry:false});
+        if (stat?.isFile() && stat.size > 0) {
+          mediaSaved=true;
+          if(!job.files.includes(file))job.files.push(file);
+        } else job.error='下载器报告的媒体文件不存在或为空';
+      }
+      else if(value.startsWith('__SUB_FORMATS__')) {
+        if(value==='__SUB_FORMATS__') addSubtitleWarning(job,'未找到匹配所选语言的字幕。');
+      }
       else if(value.startsWith('__POST__')) {if(job.status!=='canceling')job.status='processing';}
-      else {log(job,value); if(value.startsWith('ERROR:')) job.error=value;}
+      else {
+        log(job,value);
+        const track=/^WARNING: Unable to download video subtitles for '([^']+)': (.+)/.exec(value);
+        if (track) {
+          const reason=/\bHTTP Error 429\b/i.test(track[2]) ? '站点限流，HTTP 429' : '详见任务日志';
+          addSubtitleWarning(job,`${track[1]} 字幕未下载（${reason}）。`);
+          if (!job.failedSubs.includes(track[1])) job.failedSubs.push(track[1]);
+        }
+        if(value.startsWith('ERROR:')) job.error=explainError(value)||value;
+      }
     } catch {log(job,value);}
     emit();
   };
   child.stdout.on('data',b=>{out+=b.toString('utf8');const lines=out.split(/\r?\n/);out=lines.pop();lines.forEach(line);});
   child.stderr.on('data',b=>{err+=b.toString('utf8');const lines=err.split(/\r?\n/);err=lines.pop();lines.forEach(line);});
-  const finish = (code,error) => { if(done)return;done=true;if(out)line(out);if(err)line(err);job.status=job.status==='canceling'?'canceled':code===0?'completed':'failed'; if(error)job.error=error.message;if(job.status==='failed'&&!job.error)job.error='下载进程异常结束，请查看日志';if(job.status==='completed')job.progress=100;job.speed=null;job.eta=null;job.finishedAt=new Date().toISOString();active=null;persist();emit();schedule(); };
+  const finish = (code,error) => {
+    if(done)return;
+    done=true;
+    if(out)line(out);
+    if(err)line(err);
+    if(error)job.error=error.message;
+    if (subsOnly) {
+      // The media is already saved: the job stays completed and only its subtitle notes change.
+      if (job.status==='canceling' || job.error || code!==0) {
+        const reason = job.status==='canceling' ? '' : `补下字幕失败：${job.error || '下载进程异常结束，请查看日志'}`;
+        job.subtitleWarnings = reason ? [...previous.warnings, reason] : previous.warnings;
+        job.failedSubs = previous.failed;
+      }
+      job.error=''; job.status='completed'; job.progress=100; delete job.subsOnly;
+    }
+    else if(job.status==='canceling') job.status='canceled';
+    else {
+      if(!job.error && code!==0) job.error='下载进程异常结束，请查看日志';
+      if(!job.error && !mediaSaved) job.error='下载结束，但没有生成媒体文件';
+      job.status=job.error?'failed':'completed';
+      if(job.status==='completed')job.progress=100;
+    }
+    job.speed=null;job.eta=null;job.finishedAt=new Date().toISOString();
+    active=null;persist();emit();schedule();
+  };
   child.on('error',e=>finish(-1,e)); child.on('close',code=>finish(code));
 }
 async function environment(refresh=false) {
@@ -92,15 +157,18 @@ const server=http.createServer(async(req,res)=>{
       }
       if(u.pathname==='/api/job-action') {
         const job=jobs.find(j=>j.id===b.id);if(!job)throw new Error('任务不存在');
-        if(b.action==='cancel'){if(active?.id===job.id){job.status='canceling';stopChild(active.child);}else if(job.status==='queued'){job.status='canceled';}}
-        else if(b.action==='retry'){if(!['failed','canceled','interrupted'].includes(job.status))throw new Error('此任务无需重试');job.status='queued';job.progress=0;job.error='';job.logs=[];delete job.finishedAt;}
+        if(b.action==='cancel'){if(active?.id===job.id){job.status='canceling';stopChild(active.child);}else if(job.status==='queued'){if(job.subsOnly){delete job.subsOnly;job.status='completed';}else job.status='canceled';}}
+        else if(b.action==='retry'){if(!['failed','canceled','interrupted'].includes(job.status))throw new Error('此任务无需重试');job.status='queued';job.progress=0;job.error='';job.logs=[];job.subtitleWarnings=[];job.failedSubs=[];delete job.finishedAt;}
+        else if(b.action==='subs'){if(job.status!=='completed'||!job.failedSubs?.length)throw new Error('此任务没有需要补下的字幕');job.subsOnly=[...job.failedSubs];job.status='queued';}
         else if(b.action==='remove'){if(['queued','running','processing','canceling'].includes(job.status))throw new Error('请先取消任务');jobs=jobs.filter(j=>j!==job);}
         else throw new Error('未知操作');persist();emit();schedule();return json(res,{ok:true});
       }
       if(u.pathname==='/api/open-folder') {
         const job=b.id?jobs.find(j=>j.id===b.id):null;
         if(b.id&&!job)throw new Error('任务不存在');
-        const dir=normalizeOptions({outputDir:job?job.outputDir:b.outputDir||settings.outputDir},settings.outputDir).outputDir;
+        // A single video sits in its own folder, so open that folder rather than the download root.
+        const own=job?.files?.length===1?path.dirname(job.files[0]):null;
+        const dir=own&&fs.statSync(own,{throwIfNoEntry:false})?.isDirectory()?own:normalizeOptions({outputDir:job?job.outputDir:b.outputDir||settings.outputDir},settings.outputDir).outputDir;
         fs.mkdirSync(dir,{recursive:true});
         // Explorer is user-facing even when the download server runs without a console.
         // Do not inherit the hidden-window options used for yt-dlp and FFmpeg.
@@ -109,6 +177,7 @@ const server=http.createServer(async(req,res)=>{
         child.unref();
         return json(res,{ok:true});
       }
+      if(u.pathname==='/api/pick-cookies') {const {stdout}=await exec('powershell.exe',['-NoProfile','-STA','-ExecutionPolicy','Bypass','-File',path.join(root,'scripts','pick-file.ps1')],{windowsHide:true,timeout:120000});return json(res,{path:stdout.trim()});}
       if(u.pathname==='/api/pick-folder') {const {stdout}=await exec('powershell.exe',['-NoProfile','-STA','-ExecutionPolicy','Bypass','-File',path.join(root,'scripts','pick-folder.ps1')],{windowsHide:true,timeout:120000});return json(res,{path:stdout.trim()});}
       if(u.pathname==='/api/update') {
         if(active||inspecting||updating)throw new Error('请等待下载或解析结束再更新');
