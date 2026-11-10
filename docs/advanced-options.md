@@ -1,6 +1,6 @@
 # 高级选项参考
 
-适用版本：yt-dlp Studio v1.2.1。
+适用版本：yt-dlp Studio v1.2.2。
 
 [返回项目首页](../README.md) · [使用手册](user-guide.md)
 

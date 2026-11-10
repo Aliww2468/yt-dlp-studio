@@ -4,6 +4,16 @@
 
 [项目首页](README.md) · [GitHub Releases](https://github.com/Aliww2468/yt-dlp-studio/releases)
 
+## v1.2.2
+
+正式发布版本：[v1.2.2](https://github.com/Aliww2468/yt-dlp-studio/releases/tag/v1.2.2)。
+
+### 清晰度
+
+- 修复 MP4 模式下视频只有 360p 的问题：格式排序改为分辨率优先，同一分辨率下再优先 H.264/AAC。此前编码偏好排在分辨率之前，YouTube 的 360p 音视频合一格式会胜过高清格式。
+- YouTube 的 4K 没有 H.264 版本，选择 2160p 或“最高”时使用 VP9。
+- 视频文件名带上分辨率（如 ` 2160p`），以更高清晰度重新下载同一视频时另存新文件，不再沿用已有的低清晰度文件。
+
 ## v1.2.1
 
 正式发布版本：[v1.2.1](https://github.com/Aliww2468/yt-dlp-studio/releases/tag/v1.2.1)。

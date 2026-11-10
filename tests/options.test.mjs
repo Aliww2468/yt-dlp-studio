@@ -54,7 +54,7 @@ test('cookie and sign-in failures are explained in Chinese',()=>{
 test('each video is saved in its own folder; subtitle retries go beside the saved file',()=>{
   const opts=normalizeOptions({advanced:{enabled:true,autoSubs:true}},dir);
   const args=buildArgs('https://example.com',opts,{binDir:dir});
-  assert.equal(args[args.indexOf('-o')+1],'%(title).60B [%(id)s]/%(title).120B [%(id)s].%(ext)s');
+  assert.equal(args[args.indexOf('-o')+1],'%(title).60B [%(id)s]/%(title).120B [%(id)s]%(height& {}p|)s.%(ext)s');
   const media=path.join(dir,'old','Clip 100% [x].mp4');
   const subs=buildArgs('https://example.com',opts,{binDir:dir,subtitleLangs:['zh-Hans'],mediaFile:media});
   assert.equal(subs[subs.indexOf('-P')+1],path.join(dir,'old'));
@@ -98,9 +98,15 @@ test('a later retry of a less wanted language keeps the existing default track',
 test('embedding saves MKV but keeps the MP4 codec choice, and tracks get readable names',()=>{
   const args=buildArgs('https://example.com',normalizeOptions({advanced:{enabled:true,autoSubs:true,embedSubs:true}},dir),{binDir:dir});
   assert.equal(args[args.indexOf('--merge-output-format')+1],'mkv');assert.equal(args[args.indexOf('--remux-video')+1],'mkv');
-  assert.equal(args[args.indexOf('-S')+1],'vcodec:h264,acodec:aac');assert.ok(!args.includes('--embed-subs'));
+  assert.equal(args[args.indexOf('-S')+1],'res,vcodec:h264,acodec:aac');assert.ok(!args.includes('--embed-subs'));
   const plain=buildArgs('https://example.com',normalizeOptions({advanced:{enabled:true,autoSubs:true}},dir),{binDir:dir});
   assert.equal(plain[plain.indexOf('--merge-output-format')+1],'mp4');
   assert.deepEqual(trackInfo('zh-Hans'),{language:'chi',title:'简体中文'});assert.deepEqual(trackInfo('zh-Hant'),{language:'chi',title:'繁體中文'});
   assert.deepEqual(trackInfo('en-US'),{language:'eng',title:'English'});assert.deepEqual(trackInfo('tlh'),{language:'und',title:'tlh'});
+});
+test('MP4 downloads rank resolution before codec, so HD is not lost to the 360p H.264 format',()=>{
+  for(const quality of ['best','2160','1080']){
+    const args=buildArgs('https://example.com',normalizeOptions({quality,videoFormat:'mp4'},dir),{binDir:dir});
+    assert.match(args[args.indexOf('-S')+1],/^res,/);
+  }
 });
