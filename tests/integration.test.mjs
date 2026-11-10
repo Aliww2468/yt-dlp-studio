@@ -42,7 +42,11 @@ test('real yt-dlp + FFmpeg: inspect, download, extract, cancel, retry, persist a
       const audioId=(await post('jobs',{urls:`${mediaUrl}/sound.mp4`,options:{...options,mode:'audio',audioFormat:'mp3'}})).ids[0];
       const video=await settle(videoId),audio=await settle(audioId);assert.equal(video.status,'completed',video.error);assert.equal(audio.status,'completed',audio.error);assert.equal(video.progress,100);assert.ok(fs.existsSync(video.files[0]));assert.ok(audio.files[0].endsWith('.mp3'));
       const probe=JSON.parse(execFileSync(path.join(root,'bin','ffprobe.exe'),['-v','quiet','-show_streams','-of','json',audio.files[0]],{encoding:'utf8',windowsHide:true}));assert.equal(probe.streams[0].codec_name,'mp3');assert.ok(Number(probe.streams[0].duration)>1);
-      for(const j of [video,audio]){assert.equal(path.dirname(path.dirname(j.files[0])),dest);assert.match(path.basename(path.dirname(j.files[0])),/^(\w+) \[\1\]$/);}
+      // Video: <title [id]>/<height>p/<file> (a direct file link has no height); audio has no resolution level.
+      const videoFolder=path.dirname(video.files[0]);
+      assert.equal(path.basename(videoFolder),'未知分辨率');assert.equal(path.dirname(path.dirname(videoFolder)),dest);assert.match(path.basename(path.dirname(videoFolder)),/^(\w+) \[\1\]$/);
+      assert.match(path.basename(video.files[0]),/^(\w+) \[\1\]\.mp4$/);
+      assert.equal(path.dirname(path.dirname(audio.files[0])),dest);assert.match(path.basename(path.dirname(audio.files[0])),/^(\w+) \[\1\]$/);
     });
     await t.test('cancels a real throttled download and retries it',async()=>{
       const id=(await post('jobs',{urls:`${mediaUrl}/slow.mp4`,options:{...options,advanced:{enabled:true,rateLimit:'10K'}}})).ids[0];
@@ -112,7 +116,7 @@ test('real yt-dlp + FFmpeg: inspect, download, extract, cancel, retry, persist a
       assert.ok(!broken.files.some(file=>file.endsWith('.mp3')));
     });
     await t.test('persists preferences and history across restart',async()=>{
-      await post('settings',{outputDir:dest,theme:'dark',compact:true,advanced:{enabled:true,subtitles:true}});await post('shutdown');await new Promise(r=>proc.once('exit',r));const b=await boot();assert.equal(b.settings.theme,'dark');assert.equal(b.settings.glass,undefined);assert.equal(b.settings.advanced.subtitles,true);assert.equal(b.jobs.find(j=>j.id===videoId).status,'completed');
+      await post('settings',{outputDir:dest,theme:'dark',compact:true,advanced:{enabled:true,subtitles:true}});await post('shutdown');await new Promise(r=>proc.once('exit',r));const b=await boot();assert.equal(b.version,JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version);assert.equal(b.settings.theme,'dark');assert.equal(b.settings.glass,undefined);assert.equal(b.settings.advanced.subtitles,true);assert.equal(b.jobs.find(j=>j.id===videoId).status,'completed');
     });
     await t.test('removing a history entry retains the downloaded file',async()=>{const job=(await all()).find(j=>j.id===videoId);await post('job-action',{id:videoId,action:'remove'});assert.ok(fs.existsSync(job.files[0]));assert.ok(!(await all()).some(j=>j.id===videoId));});
     await post('shutdown');await new Promise(r=>proc.once('exit',r));

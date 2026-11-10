@@ -1,6 +1,6 @@
 # 故障排查与常见问题
 
-适用版本：yt-dlp Studio v1.2.2。
+适用版本：yt-dlp Studio v1.2.3。
 
 [返回项目首页](../README.md)
 

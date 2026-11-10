@@ -4,6 +4,15 @@
 
 [项目首页](README.md) · [GitHub Releases](https://github.com/Aliww2468/yt-dlp-studio/releases)
 
+## v1.2.3
+
+正式发布版本：[v1.2.3](https://github.com/Aliww2468/yt-dlp-studio/releases/tag/v1.2.3)。
+
+### 保存方式
+
+- 修复界面左下角始终显示 v1.1 的问题：版本号改为读取程序实际版本，发行包同时附带 `package.json`。
+- 不同清晰度改为分文件夹保存：视频保存在 `<标题 [ID]>\<分辨率>\` 下（如 `2160p`），文件名不再带分辨率；音频不分这一级。
+
 ## v1.2.2
 
 正式发布版本：[v1.2.2](https://github.com/Aliww2468/yt-dlp-studio/releases/tag/v1.2.2)。

@@ -21,7 +21,7 @@ foreach ($mode in @('portable','online')) {
     New-Item -ItemType Directory -Path $stage | Out-Null
     Get-ChildItem -LiteralPath $publish | Where-Object Extension -ne '.xml' | Copy-Item -Destination $stage -Recurse
     foreach ($folder in @('public','lib','licenses')) { Copy-Item -LiteralPath (Join-Path $root $folder) -Destination $stage -Recurse }
-    foreach ($name in @('server.mjs','README.md','启动.vbs','启动.cmd','安装下载组件.cmd')) { Copy-Item -LiteralPath (Join-Path $root $name) -Destination $stage }
+    foreach ($name in @('server.mjs','package.json','README.md','启动.vbs','启动.cmd','安装下载组件.cmd')) { Copy-Item -LiteralPath (Join-Path $root $name) -Destination $stage }
     New-Item -ItemType Directory -Path (Join-Path $stage 'scripts') | Out-Null
     foreach ($name in @('setup.ps1','ensure-dependencies.ps1','pick-folder.ps1','pick-file.ps1','build-tray.ps1','TrayApp.cs','launch.ps1')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $stage 'scripts') }
     if ($mode -eq 'portable') {

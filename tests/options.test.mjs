@@ -54,7 +54,9 @@ test('cookie and sign-in failures are explained in Chinese',()=>{
 test('each video is saved in its own folder; subtitle retries go beside the saved file',()=>{
   const opts=normalizeOptions({advanced:{enabled:true,autoSubs:true}},dir);
   const args=buildArgs('https://example.com',opts,{binDir:dir});
-  assert.equal(args[args.indexOf('-o')+1],'%(title).60B [%(id)s]/%(title).120B [%(id)s]%(height& {}p|)s.%(ext)s');
+  assert.equal(args[args.indexOf('-o')+1],'%(title).60B [%(id)s]/%(height&{}p|未知分辨率)s/%(title).120B [%(id)s].%(ext)s');
+  const audio=buildArgs('https://example.com',normalizeOptions({mode:'audio'},dir),{binDir:dir});
+  assert.equal(audio[audio.indexOf('-o')+1],'%(title).60B [%(id)s]/%(title).120B [%(id)s].%(ext)s');
   const media=path.join(dir,'old','Clip 100% [x].mp4');
   const subs=buildArgs('https://example.com',opts,{binDir:dir,subtitleLangs:['zh-Hans'],mediaFile:media});
   assert.equal(subs[subs.indexOf('-P')+1],path.join(dir,'old'));
