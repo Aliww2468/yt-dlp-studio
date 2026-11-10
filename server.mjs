@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { validateUrl, normalizeOptions, buildArgs, advancedDefaults } from './lib/options.mjs';
 import { startWindowsTray } from './lib/tray.mjs';
 import { explainError } from './lib/errors.mjs';
+import { convertSidecars, embedSubtitles } from './lib/subtitles.mjs';
 import { normalizeTheme } from './lib/appearance.mjs';
 import { resolveDownloadTools } from './lib/dependencies.mjs';
 const exec = promisify(execFile);
@@ -37,6 +38,24 @@ const persist = () => save('jobs.json',jobs);
 const log = (job,line) => { job.logs.push(line.slice(0,4000)); job.logs = job.logs.slice(-100); };
 function addSubtitleWarning(job, message) {
   if (!job.subtitleWarnings.includes(message)) job.subtitleWarnings.push(message);
+}
+const wantsSubtitles = job => { const a = job.options.advanced; return a.enabled && (a.subtitles || a.autoSubs); };
+// Windows players read SRT, not the VTT that sites serve, and show only subtitles embedded in MKV.
+// So finished jobs get cleaned SRT files and, when embedding is on, an MKV with those tracks.
+async function processSubtitles(job, { embed }) {
+  const a = job.options.advanced, keepVtt = a.subtitleFormat === 'vtt';
+  for (const [i, file] of job.files.entries()) {
+    if (!fs.statSync(file,{throwIfNoEntry:false})?.isFile()) continue;
+    let ranked = [];
+    try { ({ranked} = convertSidecars(file, {order:a.subtitleLangs, keepVtt})); }
+    catch (e) { addSubtitleWarning(job, `字幕转换为 SRT 失败：${e.message}`); continue; }
+    if (embed && ranked.length) {
+      try { job.files[i] = await embedSubtitles(file, ranked, path.join(binDir,'ffmpeg.exe')); }
+      catch (e) { addSubtitleWarning(job, `字幕嵌入失败：${e.message}`); }
+    }
+    // "Keep VTT" means the SRT copies only served the embedding step.
+    if (keepVtt) for (const t of [...ranked, {file:path.join(path.dirname(file),`${path.parse(file).name}.srt`)}]) fs.rmSync(t.file,{force:true});
+  }
 }
 function stopChild(child) {
   if (process.platform === 'win32') { const killer = spawn('taskkill',['/pid',String(child.pid),'/t','/f'],{windowsHide:true}); killer.on('error',()=>child.kill()); }
@@ -116,8 +135,12 @@ function schedule() {
       job.status=job.error?'failed':'completed';
       if(job.status==='completed')job.progress=100;
     }
-    job.speed=null;job.eta=null;job.finishedAt=new Date().toISOString();
-    active=null;persist();emit();schedule();
+    const settle = () => { job.speed=null;job.eta=null;job.finishedAt=new Date().toISOString(); active=null;persist();emit();schedule(); };
+    if (job.status!=='completed' || !wantsSubtitles(job)) return settle();
+    const a = job.options.advanced, embed = !subsOnly && a.embedSubs && job.options.mode==='video';
+    if (a.subtitleFormat==='vtt' && !embed) return settle();
+    job.status='processing'; job.speed=null; job.eta=null; emit();
+    processSubtitles(job,{embed}).catch(e=>addSubtitleWarning(job,`字幕处理失败：${e.message}`)).finally(()=>{ job.status='completed'; settle(); });
   };
   child.on('error',e=>finish(-1,e)); child.on('close',code=>finish(code));
 }

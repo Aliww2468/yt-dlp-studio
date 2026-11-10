@@ -4,6 +4,17 @@
 
 [项目首页](README.md) · [GitHub Releases](https://github.com/Aliww2468/yt-dlp-studio/releases)
 
+## v1.2.1
+
+正式发布版本：[v1.2.1](https://github.com/Aliww2468/yt-dlp-studio/releases/tag/v1.2.1)。
+
+### 字幕
+
+- 新增“字幕文件格式”选项，默认将 VTT 字幕转换为 Windows 自带播放器可读取的 SRT，并清理 YouTube 自动字幕中的重复滚动行。
+- 首选语言的字幕另存为与媒体同名的 `.srt`，便于播放器加载。
+- 开启“将字幕嵌入视频”后，视频保存为 MKV 并嵌入清理过的 SRT 字幕，音视频不重新编码；字幕轨带有可读名称，首选语言为默认字幕，可在 Windows 自带播放器中直接显示。
+- 补下字幕后同样转换为 SRT；补下较低优先级的语言时，不会替换原有的默认字幕。
+
 ## v1.2.0
 
 正式发布版本：[v1.2.0](https://github.com/Aliww2468/yt-dlp-studio/releases/tag/v1.2.0)。

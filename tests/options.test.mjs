@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import {normalizeOptions,validateUrl,buildArgs} from '../lib/options.mjs';
 import {explainError} from '../lib/errors.mjs';
+import {vttToSrt,convertSidecars} from '../lib/subtitles.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import {trackInfo} from '../lib/subtitles.mjs';
 const dir=path.resolve('test-output');
 test('only HTTP(S) links are accepted; arguments cannot become executable options',()=>{
   for(const url of ['--exec=calc','file:///C:/secret','javascript:alert(1)','https://user:pass@example.com'])assert.throws(()=>validateUrl(url));
@@ -63,4 +67,40 @@ test('saved thumbnails are converted to the chosen format',()=>{
   assert.ok(!build({thumbnailFormat:''}).includes('--convert-thumbnails'));
   const bad=build({thumbnailFormat:'gif;rm'});assert.equal(bad[bad.indexOf('--convert-thumbnails')+1],'jpg');
   assert.ok(!build({thumbnail:false}).includes('--convert-thumbnails'));
+});
+test('YouTube rolling VTT becomes clean SRT, one line per cue',()=>{
+  const vtt=['WEBVTT','Kind: captions','',
+    '00:00:04.960 --> 00:00:06.750 align:start position:0%',' ','Hi<00:00:05.040><c> everyone.</c>','',
+    '00:00:06.750 --> 00:00:06.760 align:start position:0%','Hi everyone.',' ','',
+    '00:00:06.760 --> 00:00:08.430 align:start position:0%','Hi everyone.','This<00:00:07.000><c> is</c> &amp; more','',
+    '00:00:08.430 --> 00:00:08.440','Hi everyone.','This is & more',''].join('\n');
+  assert.equal(vttToSrt(vtt),'1\n00:00:04,960 --> 00:00:06,760\nHi everyone.\n\n2\n00:00:06,760 --> 00:00:08,440\nThis is & more\n');
+  assert.equal(vttToSrt('WEBVTT\n\n01:02.500 --> 01:03.000\nNo.\n\n01:03.000 --> 01:04.000\nNo.\n'),'1\n00:01:02,500 --> 00:01:03,000\nNo.\n\n2\n00:01:03,000 --> 00:01:04,000\nNo.\n');
+});
+test('sidecar VTT files become SRT and the preferred language is saved under the media name',()=>{
+  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'subs-'));
+  const media=path.join(folder,'Clip [x].mp4');fs.writeFileSync(media,'');
+  for(const lang of ['en','zh-Hant','zh-Hans'])fs.writeFileSync(path.join(folder,`Clip [x].${lang}.vtt`),`WEBVTT\n\n00:00.000 --> 00:01.000\n${lang}\n`);
+  const r=convertSidecars(media,{order:'zh-Hans,zh.*,en'});
+  assert.equal(r.preferred,'zh-Hans');
+  assert.deepEqual(fs.readdirSync(folder).sort(),['Clip [x].en.srt','Clip [x].mp4','Clip [x].srt','Clip [x].zh-Hans.srt','Clip [x].zh-Hant.srt']);
+  assert.match(fs.readFileSync(path.join(folder,'Clip [x].srt'),'utf8'),/zh-Hans/);
+  fs.rmSync(folder,{recursive:true});
+});
+test('a later retry of a less wanted language keeps the existing default track',()=>{
+  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'subs-'));
+  const media=path.join(folder,'Clip.mp4');fs.writeFileSync(media,'');
+  fs.writeFileSync(path.join(folder,'Clip.zh-Hans.srt'),'zh');fs.writeFileSync(path.join(folder,'Clip.en.vtt'),'WEBVTT\n\n00:00.000 --> 00:01.000\nen\n');
+  assert.equal(convertSidecars(media,{order:'zh.*,en'}).preferred,'zh-Hans');
+  assert.equal(fs.readFileSync(path.join(folder,'Clip.srt'),'utf8'),'zh');
+  fs.rmSync(folder,{recursive:true});
+});
+test('embedding saves MKV but keeps the MP4 codec choice, and tracks get readable names',()=>{
+  const args=buildArgs('https://example.com',normalizeOptions({advanced:{enabled:true,autoSubs:true,embedSubs:true}},dir),{binDir:dir});
+  assert.equal(args[args.indexOf('--merge-output-format')+1],'mkv');assert.equal(args[args.indexOf('--remux-video')+1],'mkv');
+  assert.equal(args[args.indexOf('-S')+1],'vcodec:h264,acodec:aac');assert.ok(!args.includes('--embed-subs'));
+  const plain=buildArgs('https://example.com',normalizeOptions({advanced:{enabled:true,autoSubs:true}},dir),{binDir:dir});
+  assert.equal(plain[plain.indexOf('--merge-output-format')+1],'mp4');
+  assert.deepEqual(trackInfo('zh-Hans'),{language:'chi',title:'简体中文'});assert.deepEqual(trackInfo('zh-Hant'),{language:'chi',title:'繁體中文'});
+  assert.deepEqual(trackInfo('en-US'),{language:'eng',title:'English'});assert.deepEqual(trackInfo('tlh'),{language:'und',title:'tlh'});
 });

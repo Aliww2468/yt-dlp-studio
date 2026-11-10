@@ -69,7 +69,11 @@ test('real yt-dlp + FFmpeg: inspect, download, extract, cancel, retry, persist a
       assert.match(job.subtitleWarnings[0],/zh-Hans.*429/);
       const probe = JSON.parse(execFileSync(path.join(root,'bin','ffprobe.exe'),['-v','error','-show_streams','-of','json',job.files[0]],{encoding:'utf8',windowsHide:true}));
       assert.ok(probe.streams.some(s=>s.codec_type==='video'));
-      assert.ok(probe.streams.some(s=>s.codec_type==='subtitle' && s.tags.language==='eng'));
+      // Embedding saves MKV (the only container Windows players show subtitles from) with a titled, default track.
+      assert.match(job.files[0],/\.mkv$/);
+      const subs=probe.streams.filter(s=>s.codec_type==='subtitle');
+      assert.equal(subs.length,1);assert.equal(subs[0].codec_name,'subrip');assert.equal(subs[0].tags.language,'eng');assert.equal(subs[0].tags.title,'English');assert.equal(subs[0].disposition.default,1);
+      assert.ok(!fs.readdirSync(path.dirname(job.files[0])).some(f=>/\.(mp4|embedding\.mkv)$/.test(f)));
       assert.deepEqual(job.failedSubs,['zh-Hans']);
       const video = job.files[0], videoTime = fs.statSync(video).mtimeMs;
       // Still rate limited: the job stays completed and keeps the missing track for another try.
@@ -85,7 +89,12 @@ test('real yt-dlp + FFmpeg: inspect, download, extract, cancel, retry, persist a
       assert.deepEqual(fixed.subtitleWarnings,[]);
       assert.deepEqual(fixed.files,[video]);
       assert.equal(fs.statSync(video).mtimeMs,videoTime);
-      assert.ok(fs.readdirSync(path.dirname(video)).some(f=>f.endsWith('.zh-Hans.vtt')));
+      const saved = fs.readdirSync(path.dirname(video));
+      assert.ok(saved.some(f=>f.endsWith('.zh-Hans.srt')));
+      assert.ok(saved.some(f=>f.endsWith('.en.srt')));
+      assert.ok(!saved.some(f=>f.endsWith('.vtt')));
+      // English was the default after the first run; the retried Chinese track ranks first in "zh.*,en".
+      assert.match(fs.readFileSync(video.replace(/\.mkv$/,'.srt'),'utf8'),/Retried caption/);
       await assert.rejects(post('job-action',{id:job.id,action:'subs'}),/没有需要补下的字幕/);
     });
     await t.test('notifies when no tracks match and reports media or conversion failures',async()=>{
